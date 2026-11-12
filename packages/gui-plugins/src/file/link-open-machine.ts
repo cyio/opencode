@@ -11,6 +11,8 @@ export type LinkResolution =
   | { readonly kind: "picker"; readonly query: string }
   /** An HTML file the browser pane can load. */
   | { readonly kind: "browser"; readonly url: string }
+  /** An HTML file that opens rendered in a new tab instead of as source in the file panel. */
+  | { readonly kind: "html"; readonly path: string }
   | { readonly kind: "file"; readonly path: string; readonly selection?: LineRange }
 
 /**
@@ -107,6 +109,8 @@ export type LinkOpenEffect =
     }
   | { readonly type: "open-picker"; readonly query: string; readonly background: boolean }
   | { readonly type: "open-browser"; readonly url: string }
+  /** Opens a local HTML file rendered in a new browser tab. */
+  | { readonly type: "open-html"; readonly path: string }
   | { readonly type: "toast-failed"; readonly path: string; readonly error?: string }
   | { readonly type: "toast-timeout"; readonly path: string }
 
@@ -208,6 +212,8 @@ function resolved(state: Extract<LinkOpenState, { status: "resolving" }>, resolu
     return finish(state, [{ type: "open-picker", query: resolution.query, background: state.background }])
 
   if (resolution.kind === "browser") return finish(state, [{ type: "open-browser", url: resolution.url }])
+
+  if (resolution.kind === "html") return finish(state, [{ type: "open-html", path: resolution.path }])
 
   return {
     state: {

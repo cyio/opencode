@@ -190,6 +190,20 @@ describe("transitionLinkOpen", () => {
     ])
   })
 
+  test("HTML the browser pane cannot load opens rendered in a new tab", () => {
+    expect(
+      replay([
+        click,
+        {
+          type: "link.resolved",
+          attempt: 1,
+          route: here,
+          resolution: { kind: "html", path: "/Users/me/pages/report.html" },
+        },
+      ]).effects,
+    ).toEqual([{ type: "abort", attempt: 1 }, { type: "open-html", path: "/Users/me/pages/report.html" }])
+  })
+
   test("a rejected import, search or reread reports its error only where the user still is", () => {
     const failed: LinkOpenEvent = { type: "link.failed", attempt: 1, route: here, error: "network" }
 

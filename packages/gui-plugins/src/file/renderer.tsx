@@ -42,6 +42,7 @@ import {
   type OpenInAppProps,
 } from "@opencode/plugin/gui/file"
 import type File from "./index"
+import { openHtmlInNewTab } from "./html-tab"
 import { FileVisual } from "./label"
 import {
   createLinkExistsState,
@@ -66,7 +67,7 @@ import {
   type OpenInAppEffect,
   type OpenInAppEvent,
 } from "./open-in-app-machine"
-import { fileTabId, fileTabPath, isFileTab, openInAppParentPath, workspaceFileUrl } from "./path"
+import { fileTabId, fileTabPath, isFileTab, openInAppParentPath, pathToFileUrl, workspaceFileUrl } from "./path"
 import {
   createPickerState,
   pickerBrowsing,
@@ -842,6 +843,27 @@ const setup: Plugin.Setup<typeof File> = (ctx) => {
       return
     }
 
+    // The desktop opens the file itself, in the browser that already owns `file:` pages. The web sends the bytes to a
+    // sandboxed frame in a new tab, and falls back to the file panel when the browser blocks the tab.
+    if (effect.type === "open-html") {
+      if (desktop) return void ctx.system.openExternal(pathToFileUrl(effect.path))
+
+      void openHtmlInNewTab({ client: routed.server.client, baseUrl: routed.server.url, path: effect.path }).then(
+        (opened) => {
+          if (!opened) open(routed, effect.path, { background: false })
+        },
+        (cause: unknown) => {
+          ctx.toast.show({
+            variant: "error",
+            title: ctx.t("load.failed"),
+            description: cause instanceof Error ? cause.message : String(cause),
+          })
+        },
+      )
+
+      return
+    }
+
     batch(() => {
       applySelection(routed, screen.file, effect.path, effect.selection)
       layout.open(key(screen.file, effect.path), routed, { background: effect.background })
@@ -876,13 +898,18 @@ const setup: Plugin.Setup<typeof File> = (ctx) => {
     return fileOrPage(screen, target?.path ?? direct, parsed.selection)
   }
 
-  // The browser pane shows HTML it can load. While it is pending or off, the file opens as a tab instead.
+  // The browser pane shows HTML it can load. HTML outside the workspace has no pane, so it opens rendered in a new
+  // tab: the app cannot load a `file:` page inside its own document.
   const fileOrPage = (screen: SessionScreen, path: string, selection: LineRange | undefined): LinkResolution => {
     const pane = shared.browser()
     const routed = sessions.current()
 
-    if (routed && artifactKind(path) === "html" && pane.status === "active" && pane.value.canOpen(routed, path))
+    if (artifactKind(path) !== "html") return { kind: "file", path, selection }
+
+    if (routed && pane.status === "active" && pane.value.canOpen(routed, path))
       return { kind: "browser", url: workspaceFileUrl(screen.file.root, path) }
+
+    if (screen.file.absolute(path)) return { kind: "html", path }
 
     return { kind: "file", path, selection }
   }
